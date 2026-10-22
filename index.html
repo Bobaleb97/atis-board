@@ -28,6 +28,8 @@
     --accent: #2dd4bf;
     --star: #fbbf24;
     --danger: #ef4444;
+    --ai: #a78bfa;
+    --ai-text: #1c1333;
     font-family: "SF Mono", "IBM Plex Mono", "Courier New", monospace;
   }
   * { box-sizing: border-box; }
@@ -239,6 +241,7 @@
   .letter-box.arrival { background: var(--amber); color: var(--amber-text); }
   .letter-box.departure { background: var(--blue); color: var(--blue-text); }
   .letter-box.combined { background: var(--gray); color: var(--gray-text); }
+  .letter-box.ai { background: var(--ai); color: var(--ai-text); }
   .letter-box .type-tag {
     font-size: 9px;
     letter-spacing: 1px;
@@ -366,6 +369,7 @@
     <div class="toggle" id="viewToggle">
       <button data-view="dashboard">DASHBOARD</button>
       <button data-view="flight">CURRENT FLIGHT</button>
+      <button data-view="sayintentions">SAYINTENTIONS</button>
     </div>
     <div class="toggle" id="sourceToggle">
       <button data-source="realworld">REAL WORLD</button>
@@ -399,6 +403,14 @@
     <label for="proxyInput">CORS proxy prefix (optional)</label>
     <input type="text" id="proxyInput" placeholder="https://your-worker.workers.dev/?url=">
   </div>
+  <div class="field">
+    <label for="siDevKeyInput">SayIntentions Developer Key</label>
+    <input type="password" autocomplete="off" id="siDevKeyInput" placeholder="pk_...">
+  </div>
+  <div class="field">
+    <label for="siApiKeyInput">SayIntentions API Key (your pilot account)</label>
+    <input type="password" autocomplete="off" id="siApiKeyInput" placeholder="from portal.sayintentions.ai">
+  </div>
   <div class="field actions">
     <button class="save-btn" id="saveSettingsBtn">SAVE &amp; CLOSE</button>
   </div>
@@ -426,6 +438,10 @@
       <div class="empty-state">Set your SimBrief username in Settings, then click Load Flight.</div>
     </div>
   </section>
+  <section id="sayintentionsSection" class="hidden">
+    <p class="settings-hint" style="margin-bottom:14px;">AI-generated ATC data from SayIntentions.AI — not real-world ATIS. Uses your Airports list from Settings.</p>
+    <div id="siGrid" class="grid"></div>
+  </section>
 </main>
 
 <footer>
@@ -445,7 +461,9 @@
     starred: [],
     showAll: false,
     proxy: '',
-    simbriefUser: ''
+    simbriefUser: '',
+    siDevKey: '',
+    siApiKey: ''
   };
 
   const REALWORLD_ALL_URL = 'https://atis.info/api/all';
@@ -453,8 +471,10 @@
   const VATSIM_URL = 'https://data.vatsim.net/v3/vatsim-data.json';
   const METAR_URL = 'https://metar.vatsim.net/';
   const SIMBRIEF_URL = 'https://www.simbrief.com/api/xml.fetcher.php';
+  const SAYINTENTIONS_URL = 'https://apipri.sayintentions.ai/sapi/getWX';
   const REALWORLD_INTERVAL = 2 * 60 * 1000;
   const VATSIM_INTERVAL = 30 * 1000;
+  const SAYINTENTIONS_INTERVAL = 2 * 60 * 1000;
 
   const SAMPLE_DATA = {
     realworld: [
@@ -474,6 +494,7 @@
   let timer = null;
   let lastFetchAt = null;
   let lastDashboardEntries = [];
+  let lastSiEntries = [];
   let flightState = { data: null };
 
   function loadSettings() {
@@ -580,6 +601,27 @@
       map[icao] = line;
     });
     return map;
+  }
+
+  async function fetchSayIntentions(icaos) {
+    const list = Array.from(new Set(icaos.filter(Boolean).map(s => s.toUpperCase())));
+    if (!list.length) return [];
+    if (!settings.siApiKey) throw new Error('Set your SayIntentions API Key in Settings');
+    const url = SAYINTENTIONS_URL + '?icao=' + encodeURIComponent(list.join(',')) + '&with_comms=1&api_key=' + encodeURIComponent(settings.siApiKey);
+    const headers = settings.siDevKey ? { 'X-Developer-Key': settings.siDevKey } : {};
+    const res = await fetch(buildUrl(url), { cache: 'no-store', headers });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const comms = data.comms || [];
+    return (data.airports || []).map(a => ({
+      icao: a.airport,
+      code: a.current || '-',
+      atis: a.atis || a.atis_cpdlc || '',
+      metar: a.metar || '',
+      taf: a.taf || '',
+      comms: comms.filter(c => c.airport === a.airport)
+    }));
   }
 
   async function fetchSimbrief(username) {
@@ -790,6 +832,126 @@
     }
   }
 
+  function renderSayIntentions(entries) {
+    const grid = document.getElementById('siGrid');
+    grid.innerHTML = '';
+    if (!entries.length) {
+      grid.innerHTML = '<div class="empty-state">Add airports in Settings to see SayIntentions ATC data for them.</div>';
+      return;
+    }
+    const stars = starredSet();
+    const sorted = [...entries].sort((a, b) => {
+      const as = stars.has(a.icao.toUpperCase()) ? 0 : 1;
+      const bs = stars.has(b.icao.toUpperCase()) ? 0 : 1;
+      if (as !== bs) return as - bs;
+      return a.icao.localeCompare(b.icao);
+    });
+
+    for (const entry of sorted) {
+      const isStarred = stars.has(entry.icao.toUpperCase());
+      const key = 'sayintentions|' + entry.icao;
+      const prevCode = prevCodes[key];
+      const changed = prevCode && entry.code !== '-' && prevCode !== entry.code;
+
+      const card = document.createElement('div');
+      card.className = 'airport-card';
+
+      const head = document.createElement('div');
+      head.className = 'airport-head';
+      head.innerHTML = `<span class="icao"><button class="star-btn ${isStarred ? 'active' : ''}" data-icao="${escapeHtml(entry.icao)}">${isStarred ? '★' : '☆'}</button>${escapeHtml(entry.icao)}</span><span class="count">AI ATC</span>`;
+      card.appendChild(head);
+
+      const strip = document.createElement('div');
+      strip.className = 'strip';
+      const letterBox = document.createElement('div');
+      letterBox.className = 'letter-box ai' + (changed ? ' flash' : '');
+      letterBox.innerHTML = `${escapeHtml(entry.code)}<span class="type-tag">AI ATC</span>`;
+      const body = document.createElement('div');
+      body.className = 'strip-body';
+      const meta = document.createElement('div');
+      meta.className = 'strip-meta';
+      meta.innerHTML = `<span>SayIntentions · ${escapeHtml(entry.icao)}</span><span></span>`;
+      body.appendChild(meta);
+      if (changed) {
+        const note = document.createElement('div');
+        note.className = 'change-note';
+        note.textContent = `was ${prevCode} → now ${entry.code}`;
+        body.appendChild(note);
+      }
+      const text = document.createElement('div');
+      text.className = 'strip-text';
+      text.textContent = entry.atis || `No AI ATIS available for ${entry.icao}.`;
+      body.appendChild(text);
+      strip.appendChild(letterBox);
+      strip.appendChild(body);
+      card.appendChild(strip);
+      prevCodes[key] = entry.code;
+
+      if (entry.comms && entry.comms.length) {
+        const commsBlock = document.createElement('div');
+        commsBlock.className = 'metar-block';
+        commsBlock.textContent = 'COMMS';
+        const commsText = document.createElement('div');
+        commsText.className = 'metar-text';
+        commsText.textContent = entry.comms.map(c => `${c.type} ${c.freq}`).join(' · ');
+        commsBlock.appendChild(commsText);
+        card.appendChild(commsBlock);
+      }
+
+      const metarBlock = document.createElement('div');
+      metarBlock.className = 'metar-block';
+      metarBlock.textContent = 'METAR';
+      const metarText = document.createElement('div');
+      metarText.className = 'metar-text';
+      metarText.textContent = entry.metar || 'Unavailable';
+      metarBlock.appendChild(metarText);
+      card.appendChild(metarBlock);
+
+      if (entry.taf) {
+        const tafBlock = document.createElement('div');
+        tafBlock.className = 'metar-block';
+        tafBlock.textContent = 'TAF';
+        const tafText = document.createElement('div');
+        tafText.className = 'metar-text';
+        tafText.textContent = entry.taf;
+        tafBlock.appendChild(tafText);
+        card.appendChild(tafBlock);
+      }
+
+      grid.appendChild(card);
+    }
+    savePrevCodes();
+  }
+
+  async function loadSayIntentions() {
+    const grid = document.getElementById('siGrid');
+    const list = settings.airports || [];
+    if (!settings.siApiKey) {
+      hideBanner();
+      grid.innerHTML = '<div class="empty-state">Set your SayIntentions Developer Key and API Key in Settings, then Refresh.</div>';
+      setStatus('SayIntentions: no API key set');
+      return;
+    }
+    if (!list.length) {
+      grid.innerHTML = '<div class="empty-state">Add airports in Settings to see SayIntentions ATC data for them.</div>';
+      setStatus('SayIntentions: no airports configured');
+      return;
+    }
+    setStatus('Fetching SayIntentions AI ATC data…');
+    try {
+      const entries = await fetchSayIntentions(list);
+      hideBanner();
+      lastSiEntries = entries;
+      renderSayIntentions(entries);
+      setStatus('Updated ' + new Date().toLocaleTimeString() + ' · source: SayIntentions AI ATC');
+    } catch (err) {
+      console.error(err);
+      showBanner('SayIntentions fetch failed (' + err.message + '). Check your Developer Key and API Key in Settings.');
+      grid.innerHTML = '<div class="empty-state">Could not load SayIntentions data.</div>';
+      setStatus('SayIntentions fetch failed');
+    }
+  }
+
   function updateFlightLabel() {
     const label = document.getElementById('flightUserLabel');
     label.textContent = settings.simbriefUser ? 'SimBrief: ' + settings.simbriefUser : 'No SimBrief username set';
@@ -848,12 +1010,15 @@
 
   function tick() {
     if (settings.view === 'flight') loadFlight(false);
+    else if (settings.view === 'sayintentions') loadSayIntentions();
     else loadDashboard();
   }
 
   function restartTimer() {
     if (timer) clearInterval(timer);
-    const interval = settings.source === 'vatsim' ? VATSIM_INTERVAL : REALWORLD_INTERVAL;
+    const interval = settings.view === 'sayintentions'
+      ? SAYINTENTIONS_INTERVAL
+      : (settings.source === 'vatsim' ? VATSIM_INTERVAL : REALWORLD_INTERVAL);
     timer = setInterval(tick, interval);
   }
 
@@ -872,7 +1037,9 @@
   function showActiveView() {
     document.getElementById('dashboardSection').classList.toggle('hidden', settings.view !== 'dashboard');
     document.getElementById('flightSection').classList.toggle('hidden', settings.view !== 'flight');
-    if (settings.view === 'flight') hideBanner();
+    document.getElementById('sayintentionsSection').classList.toggle('hidden', settings.view !== 'sayintentions');
+    document.getElementById('sourceToggle').classList.toggle('hidden', settings.view === 'sayintentions');
+    if (settings.view !== 'dashboard') hideBanner();
   }
 
   document.getElementById('viewToggle').addEventListener('click', (e) => {
@@ -883,6 +1050,7 @@
     applyViewButtons();
     showActiveView();
     tick();
+    restartTimer();
   });
 
   document.getElementById('sourceToggle').addEventListener('click', (e) => {
@@ -895,7 +1063,7 @@
     restartTimer();
   });
 
-  document.getElementById('grid').addEventListener('click', (e) => {
+  function handleStarClick(e, kind) {
     const btn = e.target.closest('.star-btn');
     if (!btn) return;
     const icao = btn.dataset.icao.toUpperCase();
@@ -903,8 +1071,12 @@
     if (idx >= 0) settings.starred.splice(idx, 1);
     else settings.starred.push(icao);
     saveSettings();
-    render(lastDashboardEntries);
-  });
+    if (kind === 'dashboard') render(lastDashboardEntries);
+    else renderSayIntentions(lastSiEntries);
+  }
+
+  document.getElementById('grid').addEventListener('click', (e) => handleStarClick(e, 'dashboard'));
+  document.getElementById('siGrid').addEventListener('click', (e) => handleStarClick(e, 'sayintentions'));
 
   document.getElementById('settingsBtn').addEventListener('click', () => {
     const panel = document.getElementById('settingsPanel');
@@ -913,6 +1085,8 @@
     document.getElementById('showAllInput').checked = settings.showAll;
     document.getElementById('simbriefInput').value = settings.simbriefUser;
     document.getElementById('proxyInput').value = settings.proxy;
+    document.getElementById('siDevKeyInput').value = settings.siDevKey;
+    document.getElementById('siApiKeyInput').value = settings.siApiKey;
     document.getElementById('lookupResult').innerHTML = '';
     panel.classList.toggle('show');
   });
@@ -923,7 +1097,10 @@
     settings.showAll = document.getElementById('showAllInput').checked;
     settings.simbriefUser = document.getElementById('simbriefInput').value.trim();
     settings.proxy = document.getElementById('proxyInput').value.trim();
+    settings.siDevKey = document.getElementById('siDevKeyInput').value.trim();
+    settings.siApiKey = document.getElementById('siApiKeyInput').value.trim();
     saveSettings();
+    restartTimer();
     document.getElementById('settingsPanel').classList.remove('show');
     updateFlightLabel();
     tick();
