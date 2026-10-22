@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATIS Board</title>
+<style>
+  :root {
+    --bg: #0a0d12;
+    --panel: #11161d;
+    --panel-border: #232b36;
+    --text: #e6e9ee;
+    --text-dim: #8a93a1;
+    --amber: #f5a623;
+    --amber-text: #1a1206;
+    --blue: #3b82f6;
+    --blue-text: #06101f;
+    --gray: #6b7280;
+    --gray-text: #0d0f12;
+    --accent: #2dd4bf;
+    --star: #fbbf24;
+    --danger: #ef4444;
+    font-family: "SF Mono", "IBM Plex Mono", "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--panel-border);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  h1 {
+    font-size: 18px;
+    letter-spacing: 2px;
+    margin: 0;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+  h1 span { color: var(--accent); }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .toggle {
+    display: flex;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .toggle button {
+    background: var(--panel);
+    color: var(--text-dim);
+    border: none;
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .toggle button.active {
+    background: var(--accent);
+    color: #04201c;
+  }
+  .icon-btn {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  .icon-btn:hover { color: var(--text); }
+  .banner {
+    background: #241a0a;
+    border-bottom: 1px solid #5a3a10;
+    color: #f5c877;
+    padding: 10px 20px;
+    font-size: 13px;
+    display: none;
+  }
+  .banner.show { display: block; }
+  .settings {
+    display: none;
+    padding: 16px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--panel-border);
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .settings.show { display: flex; }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 220px;
+  }
+  .field label {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .field input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 13px;
+    width: 100%;
+  }
+  .field.checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  .field.actions {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+  .field.wide { flex-basis: 100%; }
+  .save-btn {
+    background: var(--accent);
+    color: #04201c;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 1px;
+    height: 35px;
+    white-space: nowrap;
+  }
+  .lookup-row {
+    display: flex;
+    gap: 8px;
+  }
+  .lookup-row input { flex: 1; }
+  .lookup-result { margin-top: 10px; }
+  .settings-hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin: -4px 0 0 0;
+    flex-basis: 100%;
+  }
+  main {
+    padding: 20px;
+  }
+  .hidden { display: none !important; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 14px;
+  }
+  .airport-card {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .airport-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 12px;
+    background: #0d1219;
+    border-bottom: 1px solid var(--panel-border);
+    gap: 10px;
+  }
+  .airport-head .icao {
+    font-size: 15px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+  }
+  .airport-head .count {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .star-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 15px;
+    padding: 0;
+    margin-right: 8px;
+    line-height: 1;
+  }
+  .star-btn.active { color: var(--star); }
+  .strip {
+    display: flex;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  .strip:last-child { border-bottom: none; }
+  .letter-box {
+    flex: 0 0 64px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    font-weight: bold;
+    transition: box-shadow 0.3s ease;
+  }
+  .letter-box.arrival { background: var(--amber); color: var(--amber-text); }
+  .letter-box.departure { background: var(--blue); color: var(--blue-text); }
+  .letter-box.combined { background: var(--gray); color: var(--gray-text); }
+  .letter-box .type-tag {
+    font-size: 9px;
+    letter-spacing: 1px;
+    font-weight: normal;
+    margin-top: 2px;
+  }
+  .letter-box.flash {
+    box-shadow: 0 0 0 3px #fff inset, 0 0 14px 2px #fff;
+  }
+  .strip-body {
+    flex: 1;
+    padding: 8px 12px;
+    min-width: 0;
+  }
+  .strip-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .change-note {
+    font-size: 11px;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .strip-text {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+    max-height: 90px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .metar-block {
+    padding: 8px 12px;
+    border-top: 1px solid var(--panel-border);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .metar-block .metar-text {
+    color: var(--text);
+    font-size: 12px;
+    text-transform: none;
+    letter-spacing: normal;
+    margin-top: 4px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--text-dim);
+    padding: 60px 20px;
+    font-size: 13px;
+  }
+  .flight-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  #flightUserLabel {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .flight-summary {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+  .flight-summary .item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .flight-summary .item .label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .flight-summary .item .value {
+    font-size: 14px;
+  }
+  footer {
+    padding: 10px 20px;
+    color: var(--text-dim);
+    font-size: 11px;
+    border-top: 1px solid var(--panel-border);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  footer button {
+    background: none;
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+  }
+  footer button:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ATIS <span>BOARD</span></h1>
+  <div class="controls">
+    <div class="toggle" id="viewToggle">
+      <button data-view="dashboard">DASHBOARD</button>
+      <button data-view="flight">CURRENT FLIGHT</button>
+    </div>
+    <div class="toggle" id="sourceToggle">
+      <button data-source="realworld">REAL WORLD</button>
+      <button data-source="vatsim">VATSIM</button>
+    </div>
+    <button class="icon-btn" id="refreshBtn">REFRESH</button>
+    <button class="icon-btn" id="settingsBtn">SETTINGS</button>
+  </div>
+</header>
+
+<div class="banner" id="banner"></div>
+
+<div class="settings" id="settingsPanel">
+  <div class="field">
+    <label for="airportInput">Airports (ICAO, comma separated)</label>
+    <input type="text" id="airportInput" placeholder="KLAX, KSNA, KSAN, KSFO, KLAS">
+  </div>
+  <div class="field">
+    <label for="starredInput">Starred (shown first)</label>
+    <input type="text" id="starredInput" placeholder="KLAX, KSFO">
+  </div>
+  <div class="field checkbox">
+    <input type="checkbox" id="showAllInput">
+    <label for="showAllInput" style="text-transform:none;letter-spacing:0;">Show all airports</label>
+  </div>
+  <div class="field">
+    <label for="simbriefInput">SimBrief username / pilot ID</label>
+    <input type="text" id="simbriefInput" placeholder="your SimBrief username">
+  </div>
+  <div class="field">
+    <label for="proxyInput">CORS proxy prefix (optional)</label>
+    <input type="text" id="proxyInput" placeholder="https://your-worker.workers.dev/?url=">
+  </div>
+  <div class="field actions">
+    <button class="save-btn" id="saveSettingsBtn">SAVE &amp; CLOSE</button>
+  </div>
+
+  <div class="field wide">
+    <label for="lookupInput">Field lookup — D-ATIS &amp; METAR for any airport</label>
+    <div class="lookup-row">
+      <input type="text" id="lookupInput" placeholder="e.g. KORD">
+      <button class="save-btn" id="lookupBtn" type="button">LOOK UP</button>
+    </div>
+    <div id="lookupResult" class="lookup-result"></div>
+  </div>
+</div>
+
+<main>
+  <section id="dashboardSection">
+    <div id="grid" class="grid"></div>
+  </section>
+  <section id="flightSection" class="hidden">
+    <div class="flight-controls">
+      <span id="flightUserLabel"></span>
+      <button class="icon-btn" id="loadFlightBtn">LOAD FLIGHT</button>
+    </div>
+    <div id="flightContent">
+      <div class="empty-state">Set your SimBrief username in Settings, then click Load Flight.</div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span id="statusLine">Loading…</span>
+  <button id="manualRefresh">Refresh now</button>
+</footer>
+
+<script>
+(() => {
+  const STORAGE_SETTINGS = 'atisBoard.settings';
+  const STORAGE_PREV_CODES = 'atisBoard.prevCodes';
+
+  const DEFAULT_SETTINGS = {
+    source: 'realworld',
+    view: 'dashboard',
+    airports: ['KLAX', 'KSNA', 'KSAN', 'KSFO', 'KLAS'],
+    starred: [],
+    showAll: false,
+    proxy: '',
+    simbriefUser: ''
+  };
+
+  const REALWORLD_ALL_URL = 'https://atis.info/api/all';
+  const REALWORLD_FIELD_URL = 'https://atis.info/api/';
+  const VATSIM_URL = 'https://data.vatsim.net/v3/vatsim-data.json';
+  const METAR_URL = 'https://metar.vatsim.net/';
+  const SIMBRIEF_URL = 'https://www.simbrief.com/api/xml.fetcher.php';
+  const REALWORLD_INTERVAL = 2 * 60 * 1000;
+  const VATSIM_INTERVAL = 30 * 1000;
+
+  const SAMPLE_DATA = {
+    realworld: [
+      { icao: 'KLAX', type: 'combined', code: 'R', text: 'LAX ATIS INFO R (SAMPLE DATA — live feed unavailable). 24013KT 10SM SCT015 BKN034 20/13 A2997. ADVS YOU HAVE INFO R.', updated: new Date().toISOString() },
+      { icao: 'KSFO', type: 'arrival', code: 'J', text: 'SFO ARR ATIS INFO J (SAMPLE DATA). VISUAL APPROACH RWY 28L/28R IN USE. ADVS YOU HAVE INFO J.', updated: new Date().toISOString() },
+      { icao: 'KSFO', type: 'departure', code: 'K', text: 'SFO DEP ATIS INFO K (SAMPLE DATA). DEPARTING RWY 1L/1R. ADVS YOU HAVE INFO K.', updated: new Date().toISOString() },
+      { icao: 'KLAS', type: 'combined', code: 'C', text: 'LAS ATIS INFO C (SAMPLE DATA). WIND CALM. ADVS YOU HAVE INFO C.', updated: new Date().toISOString() }
+    ],
+    vatsim: [
+      { icao: 'KLAX', type: 'combined', code: 'A', text: 'LAX ATIS INFO A (SAMPLE VATSIM DATA — live feed unavailable). ADVS YOU HAVE INFO A.', updated: new Date().toISOString() },
+      { icao: 'KJFK', type: 'arrival', code: 'B', text: 'JFK ARR ATIS INFO B (SAMPLE VATSIM DATA). ADVS YOU HAVE INFO B.', updated: new Date().toISOString() }
+    ]
+  };
+
+  let settings = loadSettings();
+  let prevCodes = loadPrevCodes();
+  let timer = null;
+  let lastFetchAt = null;
+  let lastDashboardEntries = [];
+  let flightState = { data: null };
+
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(STORAGE_SETTINGS);
+      if (!raw) return { ...DEFAULT_SETTINGS };
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_SETTINGS, ...parsed };
+    } catch (e) {
+      return { ...DEFAULT_SETTINGS };
+    }
+  }
+
+  function saveSettings() {
+    try { localStorage.setItem(STORAGE_SETTINGS, JSON.stringify(settings)); } catch (e) {}
+  }
+
+  function loadPrevCodes() {
+    try {
+      const raw = localStorage.getItem(STORAGE_PREV_CODES);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+
+  function savePrevCodes() {
+    try { localStorage.setItem(STORAGE_PREV_CODES, JSON.stringify(prevCodes)); } catch (e) {}
+  }
+
+  function buildUrl(url) {
+    if (!settings.proxy) return url;
+    return settings.proxy + encodeURIComponent(url);
+  }
+
+  async function fetchRealWorld() {
+    const res = await fetch(buildUrl(REALWORLD_ALL_URL), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    return data.map(d => ({
+      icao: d.airport,
+      type: normalizeType(d.type),
+      code: d.code || '-',
+      text: d.datis || '',
+      updated: d.updatedAt
+    }));
+  }
+
+  async function fetchVatsim() {
+    const res = await fetch(buildUrl(VATSIM_URL), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const atis = data.atis || [];
+    return atis.map(a => {
+      const parts = (a.callsign || '').split('_');
+      const icao = parts[0] || '????';
+      let type = 'combined';
+      if (parts[1] === 'A') type = 'arrival';
+      else if (parts[1] === 'D') type = 'departure';
+      return {
+        icao,
+        type,
+        code: a.atis_code || '-',
+        text: (a.text_atis || []).join(' '),
+        updated: a.last_updated
+      };
+    });
+  }
+
+  async function fetchAtisForIcaos(icaos, source) {
+    const wanted = Array.from(new Set(icaos.filter(Boolean).map(s => s.toUpperCase())));
+    const map = {};
+    if (!wanted.length) return map;
+    if (source === 'vatsim') {
+      const all = await fetchVatsim();
+      all.forEach(e => {
+        if (wanted.includes(e.icao.toUpperCase())) (map[e.icao] = map[e.icao] || []).push(e);
+      });
+      return map;
+    }
+    await Promise.all(wanted.map(async icao => {
+      try {
+        const res = await fetch(buildUrl(REALWORLD_FIELD_URL + icao), { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          data.forEach(d => {
+            const entry = { icao: d.airport, type: normalizeType(d.type), code: d.code || '-', text: d.datis || '', updated: d.updatedAt };
+            (map[entry.icao] = map[entry.icao] || []).push(entry);
+          });
+        }
+      } catch (e) { /* single-field failure ignored */ }
+    }));
+    return map;
+  }
+
+  async function fetchMetar(icaos) {
+    const list = Array.from(new Set(icaos.filter(Boolean).map(s => s.toUpperCase())));
+    if (!list.length) return {};
+    const res = await fetch(buildUrl(METAR_URL + list.join(',')), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const txt = await res.text();
+    const map = {};
+    txt.split('\n').map(l => l.trim()).filter(Boolean).forEach(line => {
+      const icao = line.split(' ')[0];
+      map[icao] = line;
+    });
+    return map;
+  }
+
+  async function fetchSimbrief(username) {
+    const url = SIMBRIEF_URL + '?username=' + encodeURIComponent(username) + '&json=1';
+    const res = await fetch(buildUrl(url), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const status = data.fetch && data.fetch.status;
+    if (status !== 'Success') throw new Error(status || 'Unknown error fetching flight plan');
+    return data;
+  }
+
+  function normalizeType(t) {
+    if (t === 'arrival' || t === 'departure' || t === 'combined') return t;
+    return 'combined';
+  }
+
+  function typeLabel(t) {
+    if (t === 'arrival') return 'ARR';
+    if (t === 'departure') return 'DEP';
+    return 'ATIS';
+  }
+
+  function timeAgo(iso) {
+    if (!iso) return '';
+    const diffMs = Date.now() - new Date(iso).getTime();
+    if (isNaN(diffMs)) return '';
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'just now';
+    if (mins === 1) return '1 min ago';
+    if (mins < 60) return mins + ' min ago';
+    const hrs = Math.floor(mins / 60);
+    return hrs + 'h ' + (mins % 60) + 'm ago';
+  }
+
+  function formatZulu(sec) {
+    if (!sec) return '—';
+    const dt = new Date(sec * 1000);
+    const hh = String(dt.getUTCHours()).padStart(2, '0');
+    const mm = String(dt.getUTCMinutes()).padStart(2, '0');
+    return hh + mm + 'Z';
+  }
+
+  function showBanner(msg) {
+    const el = document.getElementById('banner');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+
+  function hideBanner() {
+    document.getElementById('banner').classList.remove('show');
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function setStatus(msg) {
+    document.getElementById('statusLine').textContent = msg;
+  }
+
+  function starredSet() {
+    return new Set(settings.starred.map(s => s.toUpperCase()));
+  }
+
+  function filterEntries(entries) {
+    if (settings.showAll) return entries;
+    const wanted = new Set(settings.airports.map(a => a.trim().toUpperCase()).filter(Boolean));
+    if (wanted.size === 0) return entries;
+    return entries.filter(e => wanted.has(e.icao.toUpperCase()));
+  }
+
+  function groupByAirport(entries) {
+    const order = [];
+    const map = new Map();
+    for (const e of entries) {
+      if (!map.has(e.icao)) {
+        map.set(e.icao, []);
+        order.push(e.icao);
+      }
+      map.get(e.icao).push(e);
+    }
+    const stars = starredSet();
+    order.sort((a, b) => {
+      const as = stars.has(a.toUpperCase()) ? 0 : 1;
+      const bs = stars.has(b.toUpperCase()) ? 0 : 1;
+      if (as !== bs) return as - bs;
+      return a.localeCompare(b);
+    });
+    const typeOrder = { arrival: 0, departure: 1, combined: 2 };
+    for (const icao of order) {
+      map.get(icao).sort((a, b) => (typeOrder[a.type] ?? 3) - (typeOrder[b.type] ?? 3));
+    }
+    return order.map(icao => ({ icao, entries: map.get(icao) }));
+  }
+
+  function render(entries) {
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    const filtered = filterEntries(entries);
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="empty-state">No ATIS entries match your airport list. Check Settings, or enable "Show all".</div>';
+      return;
+    }
+    const groups = groupByAirport(filtered);
+    const stars = starredSet();
+
+    for (const group of groups) {
+      const card = document.createElement('div');
+      card.className = 'airport-card';
+
+      const isStarred = stars.has(group.icao.toUpperCase());
+      const head = document.createElement('div');
+      head.className = 'airport-head';
+      head.innerHTML = `<span class="icao"><button class="star-btn ${isStarred ? 'active' : ''}" data-icao="${escapeHtml(group.icao)}" title="${isStarred ? 'Unstar' : 'Star'}">${isStarred ? '★' : '☆'}</button>${escapeHtml(group.icao)}</span><span class="count">${group.entries.length} active</span>`;
+      card.appendChild(head);
+
+      for (const entry of group.entries) {
+        const key = settings.source + '|' + group.icao + '|' + entry.type;
+        const prevCode = prevCodes[key];
+        const changed = prevCode && prevCode !== entry.code;
+
+        const strip = document.createElement('div');
+        strip.className = 'strip';
+
+        const letterBox = document.createElement('div');
+        letterBox.className = 'letter-box ' + entry.type + (changed ? ' flash' : '');
+        letterBox.innerHTML = `${escapeHtml(entry.code)}<span class="type-tag">${typeLabel(entry.type)}</span>`;
+
+        const body = document.createElement('div');
+        body.className = 'strip-body';
+
+        const meta = document.createElement('div');
+        meta.className = 'strip-meta';
+        meta.innerHTML = `<span>${typeLabel(entry.type)} · ${escapeHtml(group.icao)}</span><span>${timeAgo(entry.updated)}</span>`;
+        body.appendChild(meta);
+
+        if (changed) {
+          const note = document.createElement('div');
+          note.className = 'change-note';
+          note.textContent = `was ${prevCode} → now ${entry.code}`;
+          body.appendChild(note);
+        }
+
+        const text = document.createElement('div');
+        text.className = 'strip-text';
+        text.textContent = entry.text;
+        body.appendChild(text);
+
+        strip.appendChild(letterBox);
+        strip.appendChild(body);
+        card.appendChild(strip);
+
+        prevCodes[key] = entry.code;
+      }
+
+      grid.appendChild(card);
+    }
+    savePrevCodes();
+  }
+
+  function renderFieldPanel(role, airport, atisMap, metarMap) {
+    if (!airport || !airport.icao_code) {
+      return `<div class="airport-card"><div class="airport-head"><span class="icao">${escapeHtml(role)}</span></div><div class="strip-body" style="padding:12px;color:var(--text-dim);">No ${escapeHtml(role.toLowerCase())} airport in flight plan.</div></div>`;
+    }
+    const icao = airport.icao_code;
+    const entries = atisMap[icao] || [];
+    const metar = metarMap[icao];
+    let inner = '';
+    if (entries.length) {
+      entries.forEach(entry => {
+        inner += `<div class="strip">
+          <div class="letter-box ${entry.type}">${escapeHtml(entry.code)}<span class="type-tag">${typeLabel(entry.type)}</span></div>
+          <div class="strip-body">
+            <div class="strip-meta"><span>${typeLabel(entry.type)}</span><span>${timeAgo(entry.updated)}</span></div>
+            <div class="strip-text">${escapeHtml(entry.text)}</div>
+          </div>
+        </div>`;
+      });
+    } else {
+      inner += `<div class="strip-body" style="padding:12px;color:var(--text-dim);">No active D-ATIS for ${escapeHtml(icao)}.</div>`;
+    }
+    inner += `<div class="metar-block">METAR<div class="metar-text">${metar ? escapeHtml(metar) : 'Unavailable'}</div></div>`;
+    return `<div class="airport-card">
+      <div class="airport-head"><span class="icao">${escapeHtml(role)} · ${escapeHtml(icao)}</span><span class="count">${escapeHtml(airport.name || '')}</span></div>
+      ${inner}
+    </div>`;
+  }
+
+  async function loadDashboard() {
+    setStatus('Fetching ' + (settings.source === 'vatsim' ? 'VATSIM' : 'real-world') + ' data…');
+    try {
+      const entries = settings.source === 'vatsim' ? await fetchVatsim() : await fetchRealWorld();
+      hideBanner();
+      lastDashboardEntries = entries;
+      render(entries);
+      lastFetchAt = new Date();
+      setStatus('Updated ' + lastFetchAt.toLocaleTimeString() + ' · source: ' + (settings.source === 'vatsim' ? 'VATSIM' : 'Real-world D-ATIS'));
+    } catch (err) {
+      console.error(err);
+      showBanner(
+        'Live feed unavailable (' + err.message + '). This is usually a CORS or network block. ' +
+        'Showing sample strips. If this page is hosted and the live feed still fails, set a CORS proxy prefix in Settings.'
+      );
+      lastDashboardEntries = SAMPLE_DATA[settings.source] || [];
+      render(lastDashboardEntries);
+      setStatus('Showing sample data — live fetch failed');
+    }
+  }
+
+  function updateFlightLabel() {
+    const label = document.getElementById('flightUserLabel');
+    label.textContent = settings.simbriefUser ? 'SimBrief: ' + settings.simbriefUser : 'No SimBrief username set';
+  }
+
+  async function loadFlight(forceRefetchPlan) {
+    updateFlightLabel();
+    const user = settings.simbriefUser.trim();
+    const flightContent = document.getElementById('flightContent');
+    if (!user) {
+      flightContent.innerHTML = '<div class="empty-state">Set your SimBrief username in Settings, then click Load Flight.</div>';
+      return;
+    }
+    if (forceRefetchPlan || !flightState.data) {
+      flightContent.innerHTML = '<div class="empty-state">Loading flight plan…</div>';
+    }
+    try {
+      if (forceRefetchPlan || !flightState.data) {
+        flightState.data = await fetchSimbrief(user);
+      }
+      const d = flightState.data;
+      const origin = d.origin || {};
+      const destination = d.destination || {};
+      const alternate = d.alternate || {};
+      const icaos = [origin.icao_code, destination.icao_code, alternate.icao_code].filter(Boolean);
+
+      const [atisMap, metarMap] = await Promise.all([
+        fetchAtisForIcaos(icaos, settings.source),
+        fetchMetar(icaos).catch(() => ({}))
+      ]);
+
+      const general = d.general || {};
+      const aircraft = d.aircraft || {};
+      const times = d.times || {};
+      const callsign = (general.icao_airline || '') + (general.flight_number || '');
+      const aircraftStr = [aircraft.icao_code, aircraft.reg ? '(' + aircraft.reg + ')' : ''].filter(Boolean).join(' ');
+
+      let html = '';
+      html += `<div class="flight-summary">
+        <div class="item"><span class="label">Callsign</span><span class="value">${escapeHtml(callsign || '—')}</span></div>
+        <div class="item"><span class="label">Aircraft</span><span class="value">${escapeHtml(aircraftStr || '—')}</span></div>
+        <div class="item"><span class="label">Route</span><span class="value">${escapeHtml(general.route || '—')}</span></div>
+        <div class="item"><span class="label">Sched Out / In</span><span class="value">${formatZulu(times.sched_out)} / ${formatZulu(times.sched_in)}</span></div>
+      </div>`;
+      html += '<div class="grid">';
+      html += renderFieldPanel('DEPARTURE', origin, atisMap, metarMap);
+      html += renderFieldPanel('ARRIVAL', destination, atisMap, metarMap);
+      html += renderFieldPanel('ALTERNATE', alternate, atisMap, metarMap);
+      html += '</div>';
+      flightContent.innerHTML = html;
+    } catch (err) {
+      console.error(err);
+      flightContent.innerHTML = `<div class="empty-state">Could not load flight: ${escapeHtml(err.message)}. Check the username in Settings, or file a flight at simbrief.com.</div>`;
+    }
+  }
+
+  function tick() {
+    if (settings.view === 'flight') loadFlight(false);
+    else loadDashboard();
+  }
+
+  function restartTimer() {
+    if (timer) clearInterval(timer);
+    const interval = settings.source === 'vatsim' ? VATSIM_INTERVAL : REALWORLD_INTERVAL;
+    timer = setInterval(tick, interval);
+  }
+
+  function applySourceButtons() {
+    document.querySelectorAll('#sourceToggle button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.source === settings.source);
+    });
+  }
+
+  function applyViewButtons() {
+    document.querySelectorAll('#viewToggle button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === settings.view);
+    });
+  }
+
+  function showActiveView() {
+    document.getElementById('dashboardSection').classList.toggle('hidden', settings.view !== 'dashboard');
+    document.getElementById('flightSection').classList.toggle('hidden', settings.view !== 'flight');
+    if (settings.view === 'flight') hideBanner();
+  }
+
+  document.getElementById('viewToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    settings.view = btn.dataset.view;
+    saveSettings();
+    applyViewButtons();
+    showActiveView();
+    tick();
+  });
+
+  document.getElementById('sourceToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    settings.source = btn.dataset.source;
+    saveSettings();
+    applySourceButtons();
+    tick();
+    restartTimer();
+  });
+
+  document.getElementById('grid').addEventListener('click', (e) => {
+    const btn = e.target.closest('.star-btn');
+    if (!btn) return;
+    const icao = btn.dataset.icao.toUpperCase();
+    const idx = settings.starred.findIndex(s => s.toUpperCase() === icao);
+    if (idx >= 0) settings.starred.splice(idx, 1);
+    else settings.starred.push(icao);
+    saveSettings();
+    render(lastDashboardEntries);
+  });
+
+  document.getElementById('settingsBtn').addEventListener('click', () => {
+    const panel = document.getElementById('settingsPanel');
+    document.getElementById('airportInput').value = settings.airports.join(', ');
+    document.getElementById('starredInput').value = settings.starred.join(', ');
+    document.getElementById('showAllInput').checked = settings.showAll;
+    document.getElementById('simbriefInput').value = settings.simbriefUser;
+    document.getElementById('proxyInput').value = settings.proxy;
+    document.getElementById('lookupResult').innerHTML = '';
+    panel.classList.toggle('show');
+  });
+
+  document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+    settings.airports = document.getElementById('airportInput').value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+    settings.starred = document.getElementById('starredInput').value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+    settings.showAll = document.getElementById('showAllInput').checked;
+    settings.simbriefUser = document.getElementById('simbriefInput').value.trim();
+    settings.proxy = document.getElementById('proxyInput').value.trim();
+    saveSettings();
+    document.getElementById('settingsPanel').classList.remove('show');
+    updateFlightLabel();
+    tick();
+  });
+
+  async function runLookup() {
+    const icao = document.getElementById('lookupInput').value.trim().toUpperCase();
+    const resultEl = document.getElementById('lookupResult');
+    if (!icao) { resultEl.innerHTML = ''; return; }
+    resultEl.innerHTML = `<div class="empty-state" style="padding:16px;">Looking up ${escapeHtml(icao)}…</div>`;
+    try {
+      const [atisMap, metarMap] = await Promise.all([
+        fetchAtisForIcaos([icao], settings.source),
+        fetchMetar([icao]).catch(() => ({}))
+      ]);
+      resultEl.innerHTML = renderFieldPanel('LOOKUP', { icao_code: icao, name: '' }, atisMap, metarMap);
+    } catch (err) {
+      resultEl.innerHTML = `<div class="empty-state" style="padding:16px;">Lookup failed: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  document.getElementById('lookupBtn').addEventListener('click', runLookup);
+  document.getElementById('lookupInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); runLookup(); }
+  });
+
+  document.getElementById('loadFlightBtn').addEventListener('click', () => loadFlight(true));
+  document.getElementById('refreshBtn').addEventListener('click', tick);
+  document.getElementById('manualRefresh').addEventListener('click', tick);
+
+  applySourceButtons();
+  applyViewButtons();
+  showActiveView();
+  updateFlightLabel();
+  tick();
+  restartTimer();
+})();
+</script>
+</body>
+</html>
